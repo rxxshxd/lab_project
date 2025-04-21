@@ -91,6 +91,12 @@ MATCH (p)<-[:SENT_FROM]-(t:Transaction {fraud: 1})
 RETURN p, t
 LIMIT 50
 
+//To find person involved in fraud transaction and device
+MATCH (person:Person)<-[:SENT_FROM]-(txn:Transaction {fraud: 1})-[:LOGGED_IN_FROM]->(device:Device)
+RETURN person.name AS Person, device.id AS Device_ID, txn.id AS Txn_ID
+LIMIT 50
+
+
 
 
 
