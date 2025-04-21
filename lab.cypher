@@ -1,3 +1,99 @@
-dcdc
-dcd;//dmonaec 
+LOAD CSV WITH HEADERS FROM 'file:///creditcard_fraud_graph_dataset.csv' AS row
+
+// Create or match sender and receiver users
+MERGE (sender:User {name: row.sender})
+MERGE (receiver:User {name: row.receiver})
+
+// Create or match the card and link it to sender
+MERGE (card:Card {card_number: row.card_number})
+SET card.card_type = row.card_type,
+    card.card_limit = toFloat(row.card_limit)
+MERGE (sender)-[:OWNS]->(card)
+
+// Create or match the bank
+MERGE (bank:Bank {name: row.bank})
+
+// Create or match the device
+MERGE (device:Device {device_id: row.device})
+
+// Create the transaction node with all properties
+MERGE (txn:Transaction {tx_id: row.txn_id})
+SET txn.amount = toFloat(row.amount),
+    txn.timestamp = datetime(row.timestamp),
+    txn.is_fraud = CASE row.fraud WHEN '1' THEN true ELSE false END
+
+// Create relationships between transaction and other entities
+MERGE (card)-[:USED_IN]->(txn)
+MERGE (txn)-[:TO]->(receiver)
+MERGE (txn)-[:PROCESSED_BY]->(bank)
+MERGE (txn)-[:MADE_ON]->(device);
+//LOADING THE CSV FILE above
+
+//Show Fraud Transactions and Connections
+MATCH (txn:Transaction {fraud: 1})-[r]->(n)
+RETURN txn, r, n
+LIMIT 10
+
+//Devices Used in Multiple Fraud Transactions
+MATCH (txn:Transaction {fraud: 1})-[:LOGGED_IN_FROM]->(d:Device)
+RETURN d.id AS Device_ID, count(*) AS Fraud_Count
+ORDER BY Fraud_Count DESC
+LIMIT 10
+
+//Detect Basic Fraud Ring (Triangular Pattern)
+MATCH p = (a:Person)<-[:SENT_FROM]-(t1:Transaction)-[:SENT_TO]->(b:Person),
+           (b)<-[:SENT_FROM]-(t2:Transaction)-[:SENT_TO]->(c:Person),
+           (c)<-[:SENT_FROM]-(t3:Transaction)-[:SENT_TO]->(a:Person)
+WHERE t1.fraud = 1 AND t2.fraud = 1 AND t3.fraud = 1
+RETURN p
+LIMIT 5
+
+//Highest Fraud Receiver
+MATCH (txn:Transaction {fraud: 1})-[:SENT_TO]->(p:Person)
+RETURN p.name AS Receiver, count(*) AS Fraud_Received
+ORDER BY Fraud_Received DESC
+LIMIT 5
+
+//Full Fraud Network Graph View
+MATCH (txn:Transaction {fraud: 1})--(n)
+RETURN txn, n
+LIMIT 50
+
+// Devices Used in Fraudulent Transactions
+MATCH (txn:Transaction {fraud: 1})-[:LOGGED_IN_FROM]->(d:Device)
+RETURN d.id AS Device_ID, count(*) AS Fraud_Txns
+ORDER BY Fraud_Txns DESC
+
+//To check properties of each node
+MATCH (txn:Transaction)--(n)
+RETURN txn, n
+LIMIT 50
+
+ //Devices Involved in Multiple Fraud Transactions
+MATCH (txn:Transaction {fraud: 1})-[:LOGGED_IN_FROM]->(d:Device)
+WITH d, count(txn) AS fraud_count
+WHERE fraud_count > 1
+MATCH (t:Transaction {fraud: 1})-[:LOGGED_IN_FROM]->(d)
+RETURN t, d
+LIMIT 50
+
+//Fraud Senders Who Used the Same Device
+MATCH (p1:Person)<-[:SENT_FROM]-(t1:Transaction {fraud: 1})-[:LOGGED_IN_FROM]->(d:Device)<-[:LOGGED_IN_FROM]-(t2:Transaction {fraud: 1})-[:SENT_FROM]->(p2:Person)
+WHERE p1 <> p2
+RETURN DISTINCT p1, t1, d, t2, p2
+LIMIT 50
+
+//Person involved in multiple fraud transactions
+MATCH (p:Person)<-[:SENT_FROM]-(t:Transaction {fraud: 1})
+WITH p, count(t) AS fraud_txns
+WHERE fraud_txns > 1
+MATCH (p)<-[:SENT_FROM]-(t:Transaction {fraud: 1})
+RETURN p, t
+LIMIT 50
+
+
+
+
+
+
 
