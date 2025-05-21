@@ -96,6 +96,56 @@ MATCH (person:Person)<-[:SENT_FROM]-(txn:Transaction {fraud: 1})-[:LOGGED_IN_FRO
 RETURN person.name AS Person, device.id AS Device_ID, txn.id AS Txn_ID
 LIMIT 50
 
+// Detect shared card usage across different users (potential fraud rings)
+MATCH (u1:User)-[:OWNS]->(c:Card)<-[:OWNS]-(u2:User)
+WHERE u1 <> u2
+RETURN u1, u2, c
+LIMIT 10;
+
+
+//Users involved in multiple fraud transactions 
+MATCH (u:User)<-[:TO]-(t:Transaction)
+WHERE t.is_fraud = true
+WITH u, COUNT(t) AS fraud_count
+WHERE fraud_count > 1
+RETURN u, fraud_count
+LIMIT 10;
+
+//All Fraud transactions and their receivers
+MATCH (t:Transaction {is_fraud: true})-[:TO]->(u:User)
+RETURN t, u
+LIMIT 25;
+
+//Fraud Transactions Made by Accounts Sharing the Same Device
+MATCH (u1:User)-[:OWNS]->(c1:Card)-[:USED_IN]->(t1:Transaction)-[:MADE_ON]->(d:Device),
+      (u2:User)-[:OWNS]->(c2:Card)-[:USED_IN]->(t2:Transaction)-[:MADE_ON]->(d)
+WHERE u1 <> u2 AND t1.is_fraud = true AND t2.is_fraud = true
+RETURN u1, u2, d, t1, t2
+LIMIT 10;
+
+//Bank Fraud detection 
+MATCH (c:Card)-[]->(t:Transaction)-[:PROCESSED_BY]->(b:Bank)
+WHERE t.fraud = "1" OR t.fraud = 1 OR t.is_fraud = true
+RETURN b.name AS Bank, COUNT(t) AS Fraud_Tx_Count
+ORDER BY Fraud_Tx_Count DESC
+LIMIT 5;
+
+// Visualize all fraud transactions and their direct connections
+MATCH (t:Transaction {is_fraud: true})--(n)
+RETURN t, n
+LIMIT 50;
+
+// Loop Detection
+MATCH p = (a:User)<-[:TO]-(t1:Transaction)-[:TO]->(b:User),
+           (b)<-[:TO]-(t2:Transaction)-[:TO]->(a)
+WHERE t1.is_fraud = true AND t2.is_fraud = true
+RETURN p
+LIMIT 5;
+
+
+
+
+
 
 
 
