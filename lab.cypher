@@ -142,6 +142,14 @@ WHERE t1.is_fraud = true AND t2.is_fraud = true
 RETURN p
 LIMIT 5;
 
+// Devices that are connected to multiple fraud transactions
+MATCH (t:Transaction {is_fraud: true})-[:MADE_ON]->(d:Device)
+WITH d, COUNT(t) AS fraud_count
+WHERE fraud_count > 1
+RETURN d.device_id AS Device, fraud_count
+ORDER BY fraud_count DESC
+LIMIT 10;
+
 
 
 
